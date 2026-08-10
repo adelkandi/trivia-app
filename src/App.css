@@ -1,42 +1,60 @@
-#root {
-  max-width: 1280px;
+#root, .app {
+  max-width: 900px;
   margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  padding: 1rem;
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  color: #111;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
 }
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
-}
+.app-header h1 { margin: 0; font-size: 1.4rem }
+.app-header nav button { margin-left: .5rem }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
+.container { padding: 0 0.5rem }
 
 .card {
-  padding: 2em;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(17,17,26,0.06);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
 }
 
-.read-the-docs {
-  color: #888;
+.controls { display:flex; gap:.5rem; align-items:center; margin-top:.5rem }
+select { padding:.5rem .6rem; border-radius:6px; border:1px solid #ddd }
+button { padding:.5rem .8rem; border-radius:8px; border: none; background:#2563eb; color:#fff; cursor:pointer }
+button[disabled] { opacity:.6; cursor:default }
+.error { color:#b91c1c }
+.hint { color:#666; font-size:.9rem }
+
+.quiz .meta { display:flex; gap:1rem; justify-content:space-between; font-size:.9rem; color:#444; margin-bottom:.75rem }
+.question { font-size:1.1rem; margin: .25rem 0 1rem }
+.choices { list-style:none; padding:0; margin:0; display:grid; gap:.5rem }
+.choices li button { text-align:left; width:100%; background:#f3f4f6; color:#111; border-radius:8px; padding:.6rem; border:1px solid transparent }
+.choices li button:hover { filter:brightness(.98) }
+.choices li button.correct { background:#16a34a; color:#fff }
+.choices li button.incorrect { background:#dc2626; color:#fff }
+
+.feedback { display:flex; gap:1rem; align-items:center; margin-top:1rem }
+.feedback .ok { color:#065f46 }
+.feedback .bad { color:#7f1d1d }
+
+.history-item { display:flex; justify-content:space-between; padding:.6rem 0; border-bottom:1px dashed #eee }
+.hist-left { display:flex; flex-direction:column }
+.hist-cat { font-weight:600 }
+.hist-date { font-size:.85rem; color:#666 }
+.hist-score { font-weight:700; color:#111 }
+.history-actions { display:flex; gap:.5rem; margin-top:1rem }
+
+.footer { text-align:center; color:#6b7280; font-size:.85rem; padding:1rem 0 }
+
+@media (max-width:600px) {
+  .app-header { flex-direction:column; align-items:flex-start }
+  .quiz .meta { flex-direction:column; gap:.25rem }
 }
