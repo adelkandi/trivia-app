@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react'
 import './App.css'
+import QuestionCard from './components/QuestionCard'
+import QuizHistory from './components/QuizHistory'
+import QuizResult from './components/QuizResult'
+import StartScreen from './components/StartScreen'
 
 const API_CATEGORIES = 'https://opentdb.com/api_category.php'
 const API_QUESTIONS = 'https://opentdb.com/api.php'
@@ -12,10 +16,12 @@ function decodeHTML(html) {
 }
 
 function shuffle(array) {
-  return array
-    .map((a) => ({ sort: Math.random(), value: a }))
-    .sort((a, b) => a.sort - b.sort)
-    .map((a) => a.value)
+  const copy = [...array]
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[copy[i], copy[j]] = [copy[j], copy[i]]
+  }
+  return copy
 }
 
 function useLocalHistory() {
@@ -37,47 +43,75 @@ function useLocalHistory() {
 
 export default function App() {
   const [categories, setCategories] = useState([])
-  const [selectedCat, setSelectedCat] = useState('')
+  const [selectedCategoryId, setSelectedCategoryId] = useState('')
   const [questions, setQuestions] = useState([])
-  const [index, setIndex] = useState(0)
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [score, setScore] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [answerState, setAnswerState] = useState(null)
   const [history, setHistory] = useLocalHistory()
+  const [latestResult, setLatestResult] = useState(null)
   const [view, setView] = useState('start') // start | quiz | result | history
 
   useEffect(() => {
-    fetch(API_CATEGORIES)
-      .then((r) => r.json())
-      .then((data) => setCategories(data.trivia_categories || []))
-      .catch(() => setCategories([]))
+    async function loadCategories() {
+      try {
+        const response = await fetch(API_CATEGORIES)
+        if (!response.ok) throw new Error('Failed to load categories')
+        const data = await response.json()
+        setCategories(data.trivia_categories || [])
+      } catch {
+        setCategories([])
+        setError('Could not load categories. Please refresh and try again.')
+      }
+    }
+
+    loadCategories()
   }, [])
 
   async function startQuiz() {
-    if (!selectedCat) return setError('Please select a category')
+    if (!selectedCategoryId) {
+      setError('Please select a category before starting.')
+      return
+    }
+
     setLoading(true)
     setError('')
+
     try {
-      const url = `${API_QUESTIONS}?amount=10&category=${selectedCat}&type=multiple`
-      const res = await fetch(url)
-      const data = await res.json()
+      const url = `${API_QUESTIONS}?amount=10&category=${selectedCategoryId}&type=multiple`
+      const response = await fetch(url)
+      if (!response.ok) throw new Error('Question fetch failed')
+
+      const data = await response.json()
+      if (data.response_code !== 0) throw new Error('API returned no quiz questions')
+
       const qs = (data.results || []).map((q) => {
-        const choices = shuffle([q.correct_answer, ...q.incorrect_answers])
+        const decodedCorrect = decodeHTML(q.correct_answer)
+        const choices = shuffle([
+          decodedCorrect,
+          ...q.incorrect_answers.map((answer) => decodeHTML(answer)),
+        ])
+
         return {
           question: decodeHTML(q.question),
-          correct: decodeHTML(q.correct_answer),
-          choices: choices.map((c) => decodeHTML(c)),
+          correctAnswer: decodedCorrect,
+          choices,
           category: q.category,
         }
       })
+
+      if (qs.length !== 10) throw new Error('Expected 10 questions from API')
+
       setQuestions(qs)
-      setIndex(0)
+      setCurrentQuestionIndex(0)
       setScore(0)
       setAnswerState(null)
+      setLatestResult(null)
       setView('quiz')
-    } catch (e) {
-      setError('Failed to load questions')
+    } catch {
+      setError('Failed to load questions. Please try another category.')
     } finally {
       setLoading(false)
     }
@@ -85,145 +119,111 @@ export default function App() {
 
   function selectAnswer(choice) {
     if (answerState) return
-    const q = questions[index]
-    const correct = choice === q.correct
+
+    const question = questions[currentQuestionIndex]
+    const correct = choice === question.correctAnswer
+
     setAnswerState({ choice, correct })
     if (correct) setScore((s) => s + 1)
   }
 
   function nextQuestion() {
-    const next = index + 1
+    const nextIndex = currentQuestionIndex + 1
+    const finalScore = answerState?.correct ? score + 1 : score
+
     setAnswerState(null)
-    if (next >= questions.length) {
-      // finish
+
+    if (nextIndex >= questions.length) {
       const result = {
-        date: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
         category: questions[0]?.category || 'Unknown',
-        score,
+        score: finalScore,
         total: questions.length,
       }
+
       setHistory([result, ...history])
+      setLatestResult(result)
       setView('result')
     } else {
-      setIndex(next)
+      setCurrentQuestionIndex(nextIndex)
     }
   }
 
-  function resetToStart() {
+  function restartQuiz() {
     setQuestions([])
-    setIndex(0)
+    setCurrentQuestionIndex(0)
     setScore(0)
     setAnswerState(null)
     setView('start')
-    setSelectedCat('')
+    setSelectedCategoryId('')
     setError('')
   }
 
   return (
     <div className="app">
       <header className="app-header">
-        <h1>Trivia Quiz</h1>
-        <nav>
-          <button className={view === 'start' ? 'active' : ''} onClick={() => setView('start')}>Start</button>
-          <button className={view === 'history' ? 'active' : ''} onClick={() => setView('history')}>History</button>
+        <h1>Trivia Sprint</h1>
+        <nav className="app-nav">
+          <button
+            type="button"
+            className={view === 'start' ? 'btn btn-nav active' : 'btn btn-nav'}
+            onClick={() => setView('start')}
+          >
+            Start
+          </button>
+          <button
+            type="button"
+            className={view === 'history' ? 'btn btn-nav active' : 'btn btn-nav'}
+            onClick={() => setView('history')}
+          >
+            History
+          </button>
         </nav>
       </header>
 
-      <main className="container">
-        {view === 'start' && (
-          <section className="card">
-            <h2>Select Category</h2>
-            <div className="controls">
-              <select value={selectedCat} onChange={(e) => setSelectedCat(e.target.value)}>
-                <option value="">-- Choose a category --</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-              <button onClick={startQuiz} disabled={loading}>{loading ? 'Loading…' : 'Start Quiz'}</button>
-            </div>
-            {error && <p className="error">{error}</p>}
-            <p className="hint">10 questions will be fetched from Open Trivia DB.</p>
-          </section>
-        )}
+      <main className="app-main">
+        {view === 'start' ? (
+          <StartScreen
+            categories={categories}
+            selectedCategory={selectedCategoryId}
+            loading={loading}
+            error={error}
+            onCategoryChange={setSelectedCategoryId}
+            onStart={startQuiz}
+          />
+        ) : null}
 
-        {view === 'quiz' && questions.length > 0 && (
-          <section className="card quiz">
-            <div className="meta">
-              <div>Category: <strong>{questions[index].category}</strong></div>
-              <div>Question {index + 1} / {questions.length}</div>
-              <div>Score: {score}</div>
-            </div>
+        {view === 'quiz' && questions.length > 0 ? (
+          <QuestionCard
+            question={questions[currentQuestionIndex]}
+            currentIndex={currentQuestionIndex}
+            totalQuestions={questions.length}
+            score={score}
+            answerState={answerState}
+            onAnswer={selectAnswer}
+            onNext={nextQuestion}
+          />
+        ) : null}
 
-            <h3 className="question">{questions[index].question}</h3>
+        {view === 'result' ? (
+          <QuizResult
+            result={latestResult}
+            onRestart={restartQuiz}
+            onViewHistory={() => setView('history')}
+          />
+        ) : null}
 
-            <ul className="choices">
-              {questions[index].choices.map((c) => {
-                const chosen = answerState?.choice === c
-                const isCorrect = c === questions[index].correct
-                let className = ''
-                if (answerState) {
-                  if (isCorrect) className = 'correct'
-                  else if (chosen && !isCorrect) className = 'incorrect'
-                }
-                return (
-                  <li key={c}>
-                    <button className={className} onClick={() => selectAnswer(c)} disabled={!!answerState}>{c}</button>
-                  </li>
-                )
-              })}
-            </ul>
-
-            {answerState && (
-              <div className="feedback">
-                {answerState.correct ? <span className="ok">Correct!</span> : <span className="bad">Incorrect</span>}
-                <button onClick={nextQuestion}>{index + 1 === questions.length ? 'See Results' : 'Next'}</button>
-              </div>
-            )}
-          </section>
-        )}
-
-        {view === 'result' && (
-          <section className="card result">
-            <h2>Quiz Results</h2>
-            <p>Category: <strong>{questions[0]?.category}</strong></p>
-            <p>Score: <strong>{score} / {questions.length}</strong></p>
-            <p>Date: <strong>{new Date().toLocaleString()}</strong></p>
-            <div className="result-actions">
-              <button onClick={resetToStart}>Take Another Quiz</button>
-              <button onClick={() => setView('history')}>View History</button>
-            </div>
-          </section>
-        )}
-
-        {view === 'history' && (
-          <section className="card history">
-            <h2>Past Quizzes</h2>
-            {history.length === 0 ? (
-              <p>No quiz history yet.</p>
-            ) : (
-              <ul>
-                {history.map((h, i) => (
-                  <li key={h.date + i} className="history-item">
-                    <div className="hist-left">
-                      <div className="hist-cat">{h.category}</div>
-                      <div className="hist-date">{new Date(h.date).toLocaleString()}</div>
-                    </div>
-                    <div className="hist-score">{h.score} / {h.total}</div>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <div className="history-actions">
-              <button onClick={() => { setHistory([]) }}>Clear History</button>
-              <button onClick={() => setView('start')}>Back</button>
-            </div>
-          </section>
-        )}
+        {view === 'history' ? (
+          <QuizHistory
+            history={history}
+            onBack={() => setView('start')}
+            onClear={() => setHistory([])}
+          />
+        ) : null}
       </main>
 
       <footer className="footer">
-        <small>Questions from Open Trivia DB — no API key required.</small>
+        <small>Questions sourced from Open Trivia Database.</small>
       </footer>
     </div>
   )
